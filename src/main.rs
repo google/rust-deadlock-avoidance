@@ -4,7 +4,7 @@ use std::thread;
 
 fn example_with_exclusive_mutices(my_thread_mutex_permission: OuterMutexPermission) -> OuterMutexPermission {
     // We have two mutices, but each thread can only claim one at once,
-    // hence mutex-proof.
+    // hence deadlock-proof.
     let mutex1 = Arc::new(DeadlockProofMutex::new(0));
     let mutex2 = Arc::new(DeadlockProofMutex::new(0));
     let c_mutex1 = Arc::clone(&mutex1);
@@ -31,8 +31,9 @@ fn example_with_exclusive_mutices(my_thread_mutex_permission: OuterMutexPermissi
 
 fn example_with_nested_mutices(my_thread_mutex_permission: OuterMutexPermission) {
     // We have three nested mutices, and each thread is forced to claim
-    // them in the same order.
-
+    // them in the same order, hence deadlock-proof. If any thread claims
+    // them in a different order, the type system will prevent the code
+    // from compiling.
     let mutex1 = Arc::new(DeadlockProofMutex::new(0));
     let mutex2 = Arc::new(DeadlockProofMutex::new(0));
     let mutex3 = Arc::new(DeadlockProofMutex::new(0));
