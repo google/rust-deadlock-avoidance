@@ -1,24 +1,14 @@
-use deadlock_proof_mutex::{DeadlockProofMutex, MutexIdentifier, OuterMutexPermission, declare_mutex_identifier};
+use deadlock_proof_mutex::{unique_type, DeadlockProofMutex, OuterMutexPermission};
 use std::sync::Arc;
 use std::thread;
-
-declare_mutex_identifier!(MutexA);
-declare_mutex_identifier!(MutexB);
-declare_mutex_identifier!(MutexC);
-declare_mutex_identifier!(MutexD);
-declare_mutex_identifier!(MutexE);
-declare_mutex_identifier!(MutexF);
-declare_mutex_identifier!(MutexG);
-declare_mutex_identifier!(MutexH);
-
 
 fn example_with_exclusive_mutices(
     my_thread_mutex_permission: OuterMutexPermission,
 ) -> OuterMutexPermission {
     // We have two mutices, but each thread can only claim one at once,
     // hence deadlock-proof.
-    let mutex1 = Arc::new(DeadlockProofMutex::new(0, MutexA));
-    let mutex2 = Arc::new(DeadlockProofMutex::new(0, MutexB));
+    let mutex1 = Arc::new(DeadlockProofMutex::new(0, unique_type!()));
+    let mutex2 = Arc::new(DeadlockProofMutex::new(0, unique_type!()));
     let c_mutex1 = Arc::clone(&mutex1);
     let c_mutex2 = Arc::clone(&mutex2);
 
@@ -48,9 +38,9 @@ fn example_with_nested_mutices(
     // them in the same order, hence deadlock-proof. If any thread claims
     // them in a different order, the type system will prevent the code
     // from compiling.
-    let mutex1 = Arc::new(DeadlockProofMutex::new(0, MutexC));
-    let mutex2 = Arc::new(DeadlockProofMutex::new(0, MutexD));
-    let mutex3 = Arc::new(DeadlockProofMutex::new(0, MutexE));
+    let mutex1 = Arc::new(DeadlockProofMutex::new(0, unique_type!()));
+    let mutex2 = Arc::new(DeadlockProofMutex::new(0, unique_type!()));
+    let mutex3 = Arc::new(DeadlockProofMutex::new(0, unique_type!()));
     let c_mutex1 = Arc::clone(&mutex1);
     let c_mutex2 = Arc::clone(&mutex2);
     let c_mutex3 = Arc::clone(&mutex3);
@@ -89,9 +79,9 @@ fn example_with_nested_mutices(
 fn example_with_sequential_mutices(my_thread_mutex_permission: OuterMutexPermission) {
     // We have three sequential mutices. The type system ensures we always
     // claim A then B then C, never C then B then A.
-    let mutex1 = Arc::new(DeadlockProofMutex::new(0, MutexF));
-    let mutex2 = Arc::new(DeadlockProofMutex::new(0, MutexG));
-    let mutex3 = Arc::new(DeadlockProofMutex::new(0, MutexH));
+    let mutex1 = Arc::new(DeadlockProofMutex::new(0, unique_type!()));
+    let mutex2 = Arc::new(DeadlockProofMutex::new(0, unique_type!()));
+    let mutex3 = Arc::new(DeadlockProofMutex::new(0, unique_type!()));
     let c_mutex1 = Arc::clone(&mutex1);
     let c_mutex2 = Arc::clone(&mutex2);
     let c_mutex3 = Arc::clone(&mutex3);

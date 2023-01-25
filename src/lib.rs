@@ -8,6 +8,14 @@
 // * Add some negative compile tests.
 // * Convert the examples into tests.
 
+/// A macro to create a unique type.
+#[macro_export]
+macro_rules! unique_type {
+    () => {
+        || {}
+    };
+}
+
 use std::{marker::PhantomData, rc::Rc};
 
 use std::{
@@ -21,15 +29,8 @@ use std::{
 macro_rules! declare_mutex_identifier {
     ($mutex_name:ident) => {
         struct $mutex_name;
-        impl MutexIdentifier for $mutex_name {}
     };
 }
-
-/// A unique identifier for each mutex. One of these is needed for each
-/// [`DeadlockProofMutex`] - ensure you use a different type for each mutex.
-/// To do this, just create an empty struct and ensure it implements this
-/// trait.
-pub trait MutexIdentifier {}
 
 /// Some type of permission token required to claim a mutex.
 pub trait MutexPermission {}
@@ -62,23 +63,19 @@ impl OuterMutexPermission {
 
 /// Permission to claim some nested mutex. This can be obtained from
 /// [`DeadlockProofMutex::lock_for_nested`].
-pub struct NestedMutexPermission<P: MutexPermission, I: MutexIdentifier>(
+pub struct NestedMutexPermission<P: MutexPermission, I>(
     PhantomData<Rc<()>>,
     PhantomData<P>,
     PhantomData<I>,
 );
 
-impl<P: MutexPermission, I: MutexIdentifier> MutexPermission for NestedMutexPermission<P, I> {}
+impl<P: MutexPermission, I> MutexPermission for NestedMutexPermission<P, I> {}
 
 /// Permission to claim some nested mutex. This can be obtained from
 /// [`DeadlockProofMutex::lock_for_nested`].
-pub struct SequentialMutexPermission<P: MutexPermission, I: MutexIdentifier>(
-    PhantomData<Rc<()>>,
-    P,
-    PhantomData<I>,
-);
+pub struct SequentialMutexPermission<P: MutexPermission, I>(PhantomData<Rc<()>>, P, PhantomData<I>);
 
-impl<P: MutexPermission, I: MutexIdentifier> SequentialMutexPermission<P, I> {
+impl<P: MutexPermission, I> SequentialMutexPermission<P, I> {
     fn new(permission: P) -> Self {
         Self(PhantomData, permission, PhantomData)
     }
@@ -90,7 +87,7 @@ impl<P: MutexPermission, I: MutexIdentifier> SequentialMutexPermission<P, I> {
     }
 }
 
-impl<P: MutexPermission, I: MutexIdentifier> MutexPermission for SequentialMutexPermission<P, I> {}
+impl<P: MutexPermission, I> MutexPermission for SequentialMutexPermission<P, I> {}
 
 struct PermissionSyncSendWrapper<P: MutexPermission>(P);
 
@@ -122,18 +119,20 @@ unsafe impl<P: MutexPermission> Sync for PermissionSyncSendWrapper<P> {}
 ///
 /// The type system guarantees that all threads claim mutices in the same way
 /// according to the above patterns, as long as each mutex has a unique
-/// [`MutexIdentifier`] type passed within its constructor.
-pub struct DeadlockProofMutex<T, P: MutexPermission, I: MutexIdentifier>(
+/// type type passed as the second parameter to its constructor.
+pub struct DeadlockProofMutex<T, P: MutexPermission, I>(
     Mutex<T>,
     PhantomData<PermissionSyncSendWrapper<P>>,
     PhantomData<I>,
 );
 
-impl<T, P: MutexPermission, I: MutexIdentifier> DeadlockProofMutex<T, P, I> {
+impl<T, P: MutexPermission, I> DeadlockProofMutex<T, P, I> {
     /// Create a new deadlock-proof mutex.
     /// The `content` parameter is the object protected by the mutex. The
-    /// `_identifier` parameter is a type unique to this mutex, typically
-    /// a blank struct, implementing [`MutexIdentifier`].
+    /// `_identifier` parameter is a type unique to this mutex. It doesn't
+    /// matter what it is - it's just used by the type system uniquely to
+    /// identify this mutex. A good way to create a unique type is with the
+    /// [`unique_type`] macro.
     pub fn new(content: T, _identifier: I) -> Self {
         Self(Mutex::new(content), PhantomData, PhantomData)
     }
@@ -175,13 +174,13 @@ impl<T, P: MutexPermission, I: MutexIdentifier> DeadlockProofMutex<T, P, I> {
 /// Deadlock-proof equivalent to [`MutexGuard`]. It's strongly recommended that you don't
 /// allow this mutex to drop, but instead explicitly call [`DeadlockProofMutexGuard::unlock`] to obtain
 /// the permission required to reclaim a mutex later.
-pub struct DeadlockProofMutexGuard<'a, T, P: MutexPermission, I: MutexIdentifier>(
+pub struct DeadlockProofMutexGuard<'a, T, P: MutexPermission, I>(
     MutexGuard<'a, T>,
     P,
     PhantomData<I>,
 );
 
-impl<'a, T, P: MutexPermission, I: MutexIdentifier> DeadlockProofMutexGuard<'a, T, P, I> {
+impl<'a, T, P: MutexPermission, I> DeadlockProofMutexGuard<'a, T, P, I> {
     /// Unlock the mutex. Returns the mutex permission token such that you
     /// can use it again to claim a different mutex.
     pub fn unlock(self) -> P {
@@ -198,7 +197,7 @@ impl<'a, T, P: MutexPermission, I: MutexIdentifier> DeadlockProofMutexGuard<'a, 
     }
 }
 
-impl<T, P: MutexPermission, I: MutexIdentifier> Deref for DeadlockProofMutexGuard<'_, T, P, I> {
+impl<T, P: MutexPermission, I> Deref for DeadlockProofMutexGuard<'_, T, P, I> {
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -206,7 +205,7 @@ impl<T, P: MutexPermission, I: MutexIdentifier> Deref for DeadlockProofMutexGuar
     }
 }
 
-impl<T, P: MutexPermission, I: MutexIdentifier> DerefMut for DeadlockProofMutexGuard<'_, T, P, I> {
+impl<T, P: MutexPermission, I> DerefMut for DeadlockProofMutexGuard<'_, T, P, I> {
     fn deref_mut(&mut self) -> &mut T {
         self.0.deref_mut()
     }
@@ -215,13 +214,13 @@ impl<T, P: MutexPermission, I: MutexIdentifier> DerefMut for DeadlockProofMutexG
 /// Deadlock-proof equivalent to [`MutexGuard`]. It's strongly recommended that you don't
 /// allow this mutex to drop, but instead explicitly call [`DeadlockProofMutexGuard::unlock`] to obtain
 /// the permission required to reclaim a mutex later.
-pub struct DeadlockProofNestedMutexGuard<'a, T, P: MutexPermission, I: MutexIdentifier>(
+pub struct DeadlockProofNestedMutexGuard<'a, T, P: MutexPermission, I>(
     MutexGuard<'a, T>,
     P,
     PhantomData<I>,
 );
 
-impl<'a, T, P: MutexPermission, I: MutexIdentifier> DeadlockProofNestedMutexGuard<'a, T, P, I> {
+impl<'a, T, P: MutexPermission, I> DeadlockProofNestedMutexGuard<'a, T, P, I> {
     /// Unlock the mutex. Returns the mutex permission token such that you
     /// can use it again to claim a different mutex.
     pub fn unlock(self, _token: NestedMutexPermission<P, I>) -> P {
@@ -238,9 +237,7 @@ impl<'a, T, P: MutexPermission, I: MutexIdentifier> DeadlockProofNestedMutexGuar
     }
 }
 
-impl<T, P: MutexPermission, I: MutexIdentifier> Deref
-    for DeadlockProofNestedMutexGuard<'_, T, P, I>
-{
+impl<T, P: MutexPermission, I> Deref for DeadlockProofNestedMutexGuard<'_, T, P, I> {
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -248,9 +245,7 @@ impl<T, P: MutexPermission, I: MutexIdentifier> Deref
     }
 }
 
-impl<T, P: MutexPermission, I: MutexIdentifier> DerefMut
-    for DeadlockProofNestedMutexGuard<'_, T, P, I>
-{
+impl<T, P: MutexPermission, I> DerefMut for DeadlockProofNestedMutexGuard<'_, T, P, I> {
     fn deref_mut(&mut self) -> &mut T {
         self.0.deref_mut()
     }
