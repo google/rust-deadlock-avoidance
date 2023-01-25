@@ -1,38 +1,32 @@
-/// Mod which ensures that nothing can create a [`MutexPermissionMod::MutexPermission`]
-/// anywhere else, by virtue of it having a private field.
-mod mutex_permission_mod {
-    use std::{marker::PhantomData, rc::Rc};
-
-    /// Type representing permission to claim a mutex. This type is !Send and
-    /// cannot be created outside the current mod due to the private field.
-    pub struct MutexPermission(PhantomData<Rc<()>>);
-
-    thread_local! {
-    pub static MUTEX_PERMISSION_TOKEN: std::cell::Cell<Option<MutexPermission>>
-    = std::cell::Cell::new(Some(MutexPermission(PhantomData)))
-    }
-
-    impl MutexPermission {
-        /// Get the thread-local mutex claiming permission. This can be called exactly once
-        /// per thread, and will panic if it's called more than once in a thread.
-        /// Because it may panic, it's strongly recommended that you claim this in the
-        /// start up of your program (or thread) and store it in some context object.
-        /// This eliminates any chance of runtime panics later.
-        /// The resulting zero-sized type can be used as permission to claim a mutex.
-        pub fn get() -> MutexPermission {
-            MUTEX_PERMISSION_TOKEN
-                .with(|thingref| thingref.take())
-                .expect("Mutex permission already claimed for this thread")
-        }
-    }
-}
+use std::{marker::PhantomData, rc::Rc};
 
 use std::{
     ops::{Deref, DerefMut},
     sync::{Mutex, MutexGuard, PoisonError},
 };
 
-pub use mutex_permission_mod::MutexPermission;
+/// Type representing permission to claim a mutex. This type is !Send and
+/// cannot be created outside the current mod due to the private field.
+pub struct MutexPermission(PhantomData<Rc<()>>);
+
+thread_local! {
+pub static MUTEX_PERMISSION_TOKEN: std::cell::Cell<Option<MutexPermission>>
+= std::cell::Cell::new(Some(MutexPermission(PhantomData)))
+}
+
+impl MutexPermission {
+    /// Get the thread-local mutex claiming permission. This can be called exactly once
+    /// per thread, and will panic if it's called more than once in a thread.
+    /// Because it may panic, it's strongly recommended that you claim this in the
+    /// start up of your program (or thread) and store it in some context object.
+    /// This eliminates any chance of runtime panics later.
+    /// The resulting zero-sized type can be used as permission to claim a mutex.
+    pub fn get() -> MutexPermission {
+        MUTEX_PERMISSION_TOKEN
+            .with(|thingref| thingref.take())
+            .expect("Mutex permission already claimed for this thread")
+    }
+}
 
 /// A mutex which is compile-time guaranteed not to deadlock.
 /// Otherwise identical to [`Mutex`].
