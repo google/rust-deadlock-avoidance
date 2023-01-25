@@ -2,6 +2,12 @@
 //! free from the risk of deadlocks. See [`DeadlockProofMutex`] for the main
 //! type you need to use.
 
+// Next steps in this experiment:
+// * See if there's a way to create anonymous types to make constructing
+//   one of these mutices easier.
+// * Add some negative compile tests.
+// * Convert the examples into tests.
+
 use std::{marker::PhantomData, rc::Rc};
 
 use std::{
