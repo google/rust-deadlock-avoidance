@@ -59,11 +59,15 @@ impl<P: MutexPermission, I: MutexIdentifier> MutexPermission for NestedMutexPerm
 
 /// Permission to claim some nested mutex. This can be obtained from
 /// [`DeadlockProofMutex::lock_for_nested`].
-pub struct SequentialMutexPermission<P: MutexPermission>(PhantomData<Rc<()>>, P);
+pub struct SequentialMutexPermission<P: MutexPermission, I: MutexIdentifier>(
+    PhantomData<Rc<()>>,
+    P,
+    PhantomData<I>,
+);
 
-impl<P: MutexPermission> SequentialMutexPermission<P> {
+impl<P: MutexPermission, I: MutexIdentifier> SequentialMutexPermission<P, I> {
     fn new(permission: P) -> Self {
-        Self(PhantomData, permission)
+        Self(PhantomData, permission, PhantomData)
     }
 
     /// Consumes this sequential permission to return the permission
@@ -73,7 +77,7 @@ impl<P: MutexPermission> SequentialMutexPermission<P> {
     }
 }
 
-impl<P: MutexPermission> MutexPermission for SequentialMutexPermission<P> {}
+impl<P: MutexPermission, I: MutexIdentifier> MutexPermission for SequentialMutexPermission<P, I> {}
 
 struct PermissionSyncSendWrapper<P: MutexPermission>(P);
 
@@ -123,10 +127,10 @@ impl<T, P: MutexPermission, I: MutexIdentifier> DeadlockProofMutex<T, P, I> {
     pub fn lock(
         &self,
         permission: P,
-    ) -> Result<DeadlockProofMutexGuard<T, P>, PoisonError<MutexGuard<T>>> {
+    ) -> Result<DeadlockProofMutexGuard<T, P, I>, PoisonError<MutexGuard<T>>> {
         self.0
             .lock()
-            .map(|guard| DeadlockProofMutexGuard(guard, permission))
+            .map(|guard| DeadlockProofMutexGuard(guard, permission, PhantomData))
     }
 
     /// Acquires this mutex, blocking the current thread until it
@@ -154,9 +158,13 @@ impl<T, P: MutexPermission, I: MutexIdentifier> DeadlockProofMutex<T, P, I> {
 /// Deadlock-proof equivalent to [`MutexGuard`]. It's strongly recommended that you don't
 /// allow this mutex to drop, but instead explicitly call [`DeadlockProofMutexGuard::unlock`] to obtain
 /// the permission required to reclaim a mutex later.
-pub struct DeadlockProofMutexGuard<'a, T, P: MutexPermission>(MutexGuard<'a, T>, P);
+pub struct DeadlockProofMutexGuard<'a, T, P: MutexPermission, I: MutexIdentifier>(
+    MutexGuard<'a, T>,
+    P,
+    PhantomData<I>,
+);
 
-impl<'a, T, P: MutexPermission> DeadlockProofMutexGuard<'a, T, P> {
+impl<'a, T, P: MutexPermission, I: MutexIdentifier> DeadlockProofMutexGuard<'a, T, P, I> {
     /// Unlock the mutex. Returns the mutex permission token such that you
     /// can use it again to claim a different mutex.
     pub fn unlock(self) -> P {
@@ -168,12 +176,12 @@ impl<'a, T, P: MutexPermission> DeadlockProofMutexGuard<'a, T, P> {
     /// mutex permission token so that you can claim another mutex in
     /// a certain sequence, which the type system will guarantee is the same
     /// for all threads.
-    pub fn unlock_for_sequential(self) -> SequentialMutexPermission<P> {
+    pub fn unlock_for_sequential(self) -> SequentialMutexPermission<P, I> {
         SequentialMutexPermission::new(self.1)
     }
 }
 
-impl<T, P: MutexPermission> Deref for DeadlockProofMutexGuard<'_, T, P> {
+impl<T, P: MutexPermission, I: MutexIdentifier> Deref for DeadlockProofMutexGuard<'_, T, P, I> {
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -181,7 +189,7 @@ impl<T, P: MutexPermission> Deref for DeadlockProofMutexGuard<'_, T, P> {
     }
 }
 
-impl<T, P: MutexPermission> DerefMut for DeadlockProofMutexGuard<'_, T, P> {
+impl<T, P: MutexPermission, I: MutexIdentifier> DerefMut for DeadlockProofMutexGuard<'_, T, P, I> {
     fn deref_mut(&mut self) -> &mut T {
         self.0.deref_mut()
     }
@@ -208,7 +216,7 @@ impl<'a, T, P: MutexPermission, I: MutexIdentifier> DeadlockProofNestedMutexGuar
     /// mutex permission token so that you can claim another mutex in
     /// a certain sequence, which the type system will guarantee is the same
     /// for all threads.
-    pub fn unlock_for_sequential(self) -> SequentialMutexPermission<P> {
+    pub fn unlock_for_sequential(self) -> SequentialMutexPermission<P, I> {
         SequentialMutexPermission::new(self.1)
     }
 }
