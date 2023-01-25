@@ -35,7 +35,7 @@ impl OuterMutexPermission {
 }
 
 /// Permission to claim some nested mutex. This can be obtained from
-/// [`DeadlockProofMutex::lock_allowing_nested`].
+/// [`DeadlockProofMutex::lock_for_nested`].
 pub struct NestedMutexPermission<P: MutexPermission>(PhantomData<Rc<()>>, PhantomData<P>);
 
 impl<P: MutexPermission> NestedMutexPermission<P> {
@@ -47,7 +47,7 @@ impl<P: MutexPermission> NestedMutexPermission<P> {
 impl<P: MutexPermission> MutexPermission for NestedMutexPermission<P> {}
 
 /// Permission to claim some nested mutex. This can be obtained from
-/// [`DeadlockProofMutex::lock_allowing_nested`].
+/// [`DeadlockProofMutex::lock_for_nested`].
 pub struct SequentialMutexPermission<P: MutexPermission>(PhantomData<Rc<()>>, P);
 
 impl<P: MutexPermission> SequentialMutexPermission<P> {
@@ -90,7 +90,7 @@ unsafe impl<P: MutexPermission> Sync for PermissionSyncSendWrapper<P> {}
 ///   mutices are claimed using [`DeadlockProofMutex::lock_for_nested`].
 /// * Each thread claims mutices then releases them in a specific identical
 ///   nested order. The first mutex is claimed using [`OuterMutexPermission`]
-///   and subsequent mutices are claimed using [`DeadlockProofMutexGuard::unlock_allowing_sequential`]
+///   and subsequent mutices are claimed using [`DeadlockProofMutexGuard::unlock_for_sequential`]
 pub struct DeadlockProofMutex<T, P: MutexPermission>(
     Mutex<T>,
     PhantomData<PermissionSyncSendWrapper<P>>,
@@ -137,7 +137,7 @@ impl<T, P: MutexPermission> DeadlockProofMutex<T, P> {
 }
 
 /// Deadlock-proof equivalent to [`MutexGuard`]. It's strongly recommended that you don't
-/// allow this mutex to drop, but instead explicitly call [`unlock`] to obtain
+/// allow this mutex to drop, but instead explicitly call [`DeadlockProofMutexGuard::unlock`] to obtain
 /// the permission required to reclaim a mutex later.
 pub struct DeadlockProofMutexGuard<'a, T, P: MutexPermission>(MutexGuard<'a, T>, P);
 
@@ -173,7 +173,7 @@ impl<T, P: MutexPermission> DerefMut for DeadlockProofMutexGuard<'_, T, P> {
 }
 
 /// Deadlock-proof equivalent to [`MutexGuard`]. It's strongly recommended that you don't
-/// allow this mutex to drop, but instead explicitly call [`unlock`] to obtain
+/// allow this mutex to drop, but instead explicitly call [`DeadlockProofMutexGuard::unlock`] to obtain
 /// the permission required to reclaim a mutex later.
 pub struct DeadlockProofNestedMutexGuard<'a, T, P: MutexPermission>(MutexGuard<'a, T>, P);
 
