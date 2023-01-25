@@ -10,8 +10,9 @@ pub trait MutexPermission {}
 
 impl MutexPermission for OuterMutexPermission {}
 
-/// Type representing permission to claim a mutex. This type is !Send and
-/// cannot be created outside the current mod due to the private field.
+/// Permission to claim an "outer" mutex. That is, a class of mutices where
+/// only one can be claimed at once in each thread, thus preventing deadlock.
+/// An instance of this object can be obtained using [`OuterMutexPermission::get`].
 pub struct OuterMutexPermission(PhantomData<Rc<()>>);
 
 thread_local! {
@@ -33,6 +34,8 @@ impl OuterMutexPermission {
     }
 }
 
+/// Permission to claim some nested mutex. This can be obtained from
+/// [`DeadlockProofMutex::lock_allowing_nested`].
 pub struct InnerMutexPermission<P: MutexPermission>(PhantomData<Rc<()>>, PhantomData<P>);
 
 impl<P: MutexPermission> InnerMutexPermission<P> {
@@ -45,11 +48,31 @@ impl<P: MutexPermission> MutexPermission for InnerMutexPermission<P> {}
 
 struct PermissionSyncSendWrapper<P: MutexPermission>(P);
 
+/// Unsafety: these types are only ever used within `PhantomData` and not
+/// exposed beyond this mod, so this is not semantically important.
+/// We need to do this because these permission tokens must not themselves
+/// be sent between threads (we carefully ensure they're not `Send`) but
+/// the mutex needs to be parameterized over this permission type.
 unsafe impl<P: MutexPermission> Send for PermissionSyncSendWrapper<P> {}
 unsafe impl<P: MutexPermission> Sync for PermissionSyncSendWrapper<P> {}
 
 /// A mutex which is compile-time guaranteed not to deadlock.
-/// Otherwise identical to [`Mutex`].
+/// Otherwise identical to [`Mutex`], though at the moment only a subset
+/// of APIs are implemented.
+///
+/// To use this, you will need to obtain some form of mutex permission token.
+/// One of these can be obtained per thread from [`OuterMutexPermission::get`].
+/// Other such permission tokens can be obtained from APIs within this class
+/// itself. Three patterns are possible:
+///
+/// * Each thread can hold only one mutex at once (because each thread uses
+///   a [`OuterMutexPermission`]
+/// * Each thread claims mutex in a specific identical nested order. The
+///   first mutex is claimed using a [`OuterMutexPermission`] and subsequent
+///   mutices are claimed using [`DeadlockProofMutex::lock_allowing_nested`].
+/// * Each thread claims mutices then releases them in a specific identical
+///   nested order. The first mutex is claimed using [`OuterMutexPermission`]
+///   and subsequent mutices are claimed using [`DeadlockProofMutexGuard::unlock_allowing_sequential`]
 pub struct DeadlockProofMutex<T, P: MutexPermission>(
     Mutex<T>,
     PhantomData<PermissionSyncSendWrapper<P>>,
