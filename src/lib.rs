@@ -36,15 +36,33 @@ impl OuterMutexPermission {
 
 /// Permission to claim some nested mutex. This can be obtained from
 /// [`DeadlockProofMutex::lock_allowing_nested`].
-pub struct InnerMutexPermission<P: MutexPermission>(PhantomData<Rc<()>>, PhantomData<P>);
+pub struct NestedMutexPermission<P: MutexPermission>(PhantomData<Rc<()>>, PhantomData<P>);
 
-impl<P: MutexPermission> InnerMutexPermission<P> {
+impl<P: MutexPermission> NestedMutexPermission<P> {
     fn new() -> Self {
         Self(PhantomData, PhantomData)
     }
 }
 
-impl<P: MutexPermission> MutexPermission for InnerMutexPermission<P> {}
+impl<P: MutexPermission> MutexPermission for NestedMutexPermission<P> {}
+
+/// Permission to claim some nested mutex. This can be obtained from
+/// [`DeadlockProofMutex::lock_allowing_nested`].
+pub struct SequentialMutexPermission<P: MutexPermission>(PhantomData<Rc<()>>, P);
+
+impl<P: MutexPermission> SequentialMutexPermission<P> {
+    fn new(permission: P) -> Self {
+        Self(PhantomData, permission)
+    }
+
+    /// Consumes this sequential permission to return the permission
+    /// token earlier in the sequence.
+    pub fn to_earlier(self) -> P {
+        self.1
+    }
+}
+
+impl<P: MutexPermission> MutexPermission for SequentialMutexPermission<P> {}
 
 struct PermissionSyncSendWrapper<P: MutexPermission>(P);
 
@@ -69,7 +87,7 @@ unsafe impl<P: MutexPermission> Sync for PermissionSyncSendWrapper<P> {}
 ///   a [`OuterMutexPermission`]
 /// * Each thread claims mutex in a specific identical nested order. The
 ///   first mutex is claimed using a [`OuterMutexPermission`] and subsequent
-///   mutices are claimed using [`DeadlockProofMutex::lock_allowing_nested`].
+///   mutices are claimed using [`DeadlockProofMutex::lock_for_nested`].
 /// * Each thread claims mutices then releases them in a specific identical
 ///   nested order. The first mutex is claimed using [`OuterMutexPermission`]
 ///   and subsequent mutices are claimed using [`DeadlockProofMutexGuard::unlock_allowing_sequential`]
@@ -99,17 +117,20 @@ impl<T, P: MutexPermission> DeadlockProofMutex<T, P> {
     /// Acquires this mutex, blocking the current thread until it
     /// is able to do so. Provides a token which can be used to claim a
     /// nested mutex.
-    pub fn lock_allowing_nested(
+    pub fn lock_for_nested(
         &self,
         permission: P,
     ) -> Result<
-        (DeadlockProofNestedMutexGuard<T, P>, InnerMutexPermission<P>),
+        (
+            DeadlockProofNestedMutexGuard<T, P>,
+            NestedMutexPermission<P>,
+        ),
         PoisonError<MutexGuard<T>>,
     > {
         self.0.lock().map(|guard| {
             (
                 DeadlockProofNestedMutexGuard(guard, permission),
-                InnerMutexPermission::new(),
+                NestedMutexPermission::new(),
             )
         })
     }
@@ -125,6 +146,15 @@ impl<'a, T, P: MutexPermission> DeadlockProofMutexGuard<'a, T, P> {
     /// can use it again to claim a different mutex.
     pub fn unlock(self) -> P {
         self.1
+    }
+
+    /// Unlock the mutex. Returns the mutex permission token such that you
+    /// can use it again to claim a different mutex. Also, returns an extra
+    /// mutex permission token so that you can claim another mutex in
+    /// a certain sequence, which the type system will guarantee is the same
+    /// for all threads.
+    pub fn unlock_for_sequential(self) -> SequentialMutexPermission<P> {
+        SequentialMutexPermission::new(self.1)
     }
 }
 
@@ -150,8 +180,17 @@ pub struct DeadlockProofNestedMutexGuard<'a, T, P: MutexPermission>(MutexGuard<'
 impl<'a, T, P: MutexPermission> DeadlockProofNestedMutexGuard<'a, T, P> {
     /// Unlock the mutex. Returns the mutex permission token such that you
     /// can use it again to claim a different mutex.
-    pub fn unlock(self, _token: InnerMutexPermission<P>) -> P {
+    pub fn unlock(self, _token: NestedMutexPermission<P>) -> P {
         self.1
+    }
+
+    /// Unlock the mutex. Returns the mutex permission token such that you
+    /// can use it again to claim a different mutex. Also, returns an extra
+    /// mutex permission token so that you can claim another mutex in
+    /// a certain sequence, which the type system will guarantee is the same
+    /// for all threads.
+    pub fn unlock_for_sequential(self) -> SequentialMutexPermission<P> {
+        SequentialMutexPermission::new(self.1)
     }
 }
 
