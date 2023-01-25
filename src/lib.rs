@@ -10,7 +10,7 @@ use std::{
 };
 
 /// A convenience macro to make it easy to create unique types that
-/// implement [`MacroIdentifier`].
+/// implement [`MutexIdentifier`].
 #[macro_export]
 macro_rules! declare_mutex_identifier {
     ($mutex_name:ident) => {
