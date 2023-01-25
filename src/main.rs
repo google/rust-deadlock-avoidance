@@ -13,7 +13,10 @@ mod mutex_permission_mod {
     }
 }
 
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::{
+    ops::{Deref, DerefMut},
+    sync::{Mutex, MutexGuard, PoisonError},
+};
 
 pub use mutex_permission_mod::MutexPermission;
 
@@ -34,6 +37,11 @@ pub fn get_mutex_permission() -> MutexPermission {
 pub struct DeadlockProofMutex<T>(Mutex<T>);
 
 impl<T> DeadlockProofMutex<T> {
+    /// Create a new deadlock-proof mutex.
+    pub fn new(content: T) -> Self {
+        Self(Mutex::new(content))
+    }
+
     /// Acquires this mutex, blocking the current thread until it
     /// is able to do so. Similar to [`Mutex::lock`], but requires a permission
     /// token to prove that you can't be causing a deadlock.
@@ -60,6 +68,44 @@ impl<'a, T> DeadlockProofMutexGuard<'a, T> {
     }
 }
 
+impl<T> Deref for DeadlockProofMutexGuard<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        self.0.deref()
+    }
+}
+
+impl<T> DerefMut for DeadlockProofMutexGuard<'_, T> {
+    fn deref_mut(&mut self) -> &mut T {
+        self.0.deref_mut()
+    }
+}
+
 fn main() {
-    println!("Hello, world!");
+    use std::sync::Arc;
+    use std::thread;
+
+    let mutex1 = Arc::new(DeadlockProofMutex::new(0));
+    let mutex2 = Arc::new(DeadlockProofMutex::new(0));
+    let c_mutex1 = Arc::clone(&mutex1);
+    let c_mutex2 = Arc::clone(&mutex2);
+
+    thread::spawn(move || {
+        let mutex_permission = get_mutex_permission();
+        let mut guard = c_mutex1.lock(mutex_permission).unwrap();
+        *guard = 10;
+        let mutex_permission = guard.unlock();
+        let mut guard = c_mutex2.lock(mutex_permission).unwrap();
+        *guard = 20;
+    })
+    .join()
+    .expect("thread::spawn failed");
+
+    let my_thread_mutex_permission = get_mutex_permission();
+
+    let guard = mutex1.lock(my_thread_mutex_permission).unwrap();
+    assert_eq!(*guard, 10);
+    let my_thread_mutex_permission = guard.unlock();
+    assert_eq!(*mutex2.lock(my_thread_mutex_permission).unwrap(), 20);
 }
