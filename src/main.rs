@@ -1,9 +1,8 @@
 use deadlock_proof_mutex::{DeadlockProofMutex, OuterMutexPermission};
+use std::sync::Arc;
+use std::thread;
 
 fn main() {
-    use std::sync::Arc;
-    use std::thread;
-
     let mutex1 = Arc::new(DeadlockProofMutex::new(0));
     let mutex2 = Arc::new(DeadlockProofMutex::new(0));
     let c_mutex1 = Arc::clone(&mutex1);
