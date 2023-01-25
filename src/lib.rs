@@ -1,3 +1,7 @@
+//! A crate to provide mutices which the Rust type system can prove are
+//! free from the risk of deadlocks. See [`DeadlockProofMutex`] for the main
+//! type you need to use.
+
 use std::{marker::PhantomData, rc::Rc};
 
 use std::{
@@ -5,12 +9,15 @@ use std::{
     sync::{Mutex, MutexGuard, PoisonError},
 };
 
-// macro_rules! declare_mutex_identifier  {
-//     ($mutex_name:ident) => {
-//         struct $mutex_name;
-//         impl MutexIdentifier for $mutex_name {}
-//     };
-// }
+/// A convenience macro to make it easy to create unique types that
+/// implement [`MacroIdentifier`].
+#[macro_export]
+macro_rules! declare_mutex_identifier {
+    ($mutex_name:ident) => {
+        struct $mutex_name;
+        impl MutexIdentifier for $mutex_name {}
+    };
+}
 
 /// A unique identifier for each mutex. One of these is needed for each
 /// [`DeadlockProofMutex`] - ensure you use a different type for each mutex.
@@ -106,6 +113,10 @@ unsafe impl<P: MutexPermission> Sync for PermissionSyncSendWrapper<P> {}
 /// * Each thread claims mutices then releases them in a specific identical
 ///   nested order. The first mutex is claimed using [`OuterMutexPermission`]
 ///   and subsequent mutices are claimed using [`DeadlockProofMutexGuard::unlock_for_sequential`]
+///
+/// The type system guarantees that all threads claim mutices in the same way
+/// according to the above patterns, as long as each mutex has a unique
+/// [`MutexIdentifier`] type passed within its constructor.
 pub struct DeadlockProofMutex<T, P: MutexPermission, I: MutexIdentifier>(
     Mutex<T>,
     PhantomData<PermissionSyncSendWrapper<P>>,

@@ -1,30 +1,16 @@
-use deadlock_proof_mutex::{DeadlockProofMutex, MutexIdentifier, OuterMutexPermission};
+use deadlock_proof_mutex::{DeadlockProofMutex, MutexIdentifier, OuterMutexPermission, declare_mutex_identifier};
 use std::sync::Arc;
 use std::thread;
 
-struct MutexA;
-impl MutexIdentifier for MutexA {}
+declare_mutex_identifier!(MutexA);
+declare_mutex_identifier!(MutexB);
+declare_mutex_identifier!(MutexC);
+declare_mutex_identifier!(MutexD);
+declare_mutex_identifier!(MutexE);
+declare_mutex_identifier!(MutexF);
+declare_mutex_identifier!(MutexG);
+declare_mutex_identifier!(MutexH);
 
-struct MutexB;
-impl MutexIdentifier for MutexB {}
-
-struct MutexC;
-impl MutexIdentifier for MutexC {}
-
-struct MutexD;
-impl MutexIdentifier for MutexD {}
-
-struct MutexE;
-impl MutexIdentifier for MutexE {}
-
-struct MutexF;
-impl MutexIdentifier for MutexF {}
-
-struct MutexG;
-impl MutexIdentifier for MutexG {}
-
-struct MutexH;
-impl MutexIdentifier for MutexH {}
 
 fn example_with_exclusive_mutices(
     my_thread_mutex_permission: OuterMutexPermission,
