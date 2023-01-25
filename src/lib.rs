@@ -41,6 +41,8 @@ impl<P: MutexPermission> InnerMutexPermission<P> {
     }
 }
 
+impl<P: MutexPermission> MutexPermission for InnerMutexPermission<P> {}
+
 struct PermissionSyncSendWrapper<P: MutexPermission>(P);
 
 unsafe impl<P: MutexPermission> Send for PermissionSyncSendWrapper<P> {}
