@@ -1,4 +1,4 @@
-use deadlock_proof_mutex::{DeadlockProofMutex, MutexPermission};
+use deadlock_proof_mutex::{DeadlockProofMutex, OuterMutexPermission};
 
 fn main() {
     use std::sync::Arc;
@@ -10,7 +10,7 @@ fn main() {
     let c_mutex2 = Arc::clone(&mutex2);
 
     thread::spawn(move || {
-        let mutex_permission = MutexPermission::get();
+        let mutex_permission = OuterMutexPermission::get();
         let mut guard = c_mutex1.lock(mutex_permission).unwrap();
         *guard = 10;
         let mutex_permission = guard.unlock();
@@ -20,7 +20,7 @@ fn main() {
     .join()
     .expect("thread::spawn failed");
 
-    let my_thread_mutex_permission = MutexPermission::get();
+    let my_thread_mutex_permission = OuterMutexPermission::get();
 
     let guard = mutex1.lock(my_thread_mutex_permission).unwrap();
     assert_eq!(*guard, 10);
